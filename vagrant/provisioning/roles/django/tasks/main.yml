@@ -3,6 +3,9 @@
 - name: install project requirements
   shell: env/bin/pip install -r {{web_root}}/requirements.txt chdir={{project_root}}
 
+- name: install sc2reader from github
+  shell: env/bin/pip install --upgrade -e git+git://github.com/GraylinKim/sc2reader#egg=sc2reader
+
 - name: install gunicorn start script
   template: src=gunicorn_start dest={{project_env}}/bin/gunicorn_start mode=u+x group={{linux_user}} owner={{linux_user}}
   notify:

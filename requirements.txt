@@ -2,5 +2,3 @@ Django
 psycopg2
 gunicorn
 Pillow
-sc2reader
-
