@@ -1,0 +1,48 @@
+---
+
+- name: Add source for mongodb
+  shell: sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 7F0CEB10
+  shell: echo "deb http://repo.mongodb.org/apt/ubuntu trusty/mongodb-org/3.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-3.0.list
+
+- name: update apt-key
+  shell: apt-key update
+
+- name: install base packages
+  apt: update_cache=yes pkg={{item}} state=latest force=yes
+  with_items:
+    - build-essential
+    - git
+    - wget
+    - ntp
+    - sudo
+    - curl
+    - libjpeg-dev
+    - zlib1g-dev
+    - python-dev
+    - python-setuptools
+    - python-pip
+    - python-virtualenv
+    - memcached
+
+- name: "Setup {{code_name}} group"
+  group: name={{code_name}} state=present system=yes
+
+- name: "Setup {{code_name}} user"
+  user: name={{code_name}} group={{code_name}} password="vagrant"
+
+# Required Directories
+- name: Ensure project root directory exists
+  file: path={{project_root}} state=directory owner={{code_name}} group={{code_name}} mode=0755
+- name: Ensure web root directory exists
+  file: path={{web_root}} state=directory owner={{code_name}} group={{code_name}} mode=0755
+- name: Ensure log directory exists
+  file: path={{log_dir}} state=directory owner={{code_name}} group={{code_name}} mode=0755
+- name: Ensure media directory exists
+  file: path={{media_dir}} state=directory owner={{code_name}} group={{code_name}} mode=0755
+- name: Ensure run directory exists
+  file: path={{project_root}}/run state=directory owner={{code_name}} group={{code_name}} mode=0755
+
+# chown
+- name: Set correct ownership on syncd dir
+  shell: chown -R zeratul:zeratul {{project_root}}/{{code_name}}
+

@@ -1,0 +1,27 @@
+#!/bin/bash
+
+NAME="{{code_name}}"
+DJANGODIR={{web_root}}
+SOCKFILE={{project_root}}/run/gunicorn.sock
+USER={{linux_user}}
+GROUP={{linux_user}}
+NUM_WORKERS=3
+DJANGO_SETTINGS_MODULE=settings.development
+DJANGO_WSGI_MODULE={{code_name}}.wsgi
+
+echo "Starting $NAME as `whoami`"
+
+# TODO: Add DJANGO_SETTINGS_MODULE
+
+cd {{project_env}}
+source bin/activate
+export DJANGO_SETTINGS_MODULE=$DJANGO_SETTINGS_MODULE
+export PYTHONPATH=$DJANGODIR:$PYTHONPATH
+
+exec bin/gunicorn ${DJANGO_WSGI_MODULE}:application \
+  --name $NAME \
+  --workers $NUM_WORKERS \
+  --user=$USER --group=$GROUP \
+  --bind=unix:$SOCKFILE \
+  --log-level=debug \
+  --log-file=-

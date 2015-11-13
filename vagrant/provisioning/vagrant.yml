@@ -1,0 +1,26 @@
+---
+- hosts: all
+  remote_user: vagrant
+  sudo: yes
+
+  vars:
+    code_name: zeratul
+    project_name: zeratul
+    project_root: /opt/{{code_name}}env
+    project_env: "{{project_root}}/env"
+    web_root: "{{project_root}}/{{project_name}}"
+    log_dir: "{{project_root}}/logs"
+    media_dir: "{{project_root}}/media"
+    hostname: local.zeratul
+    linux_user: "{{code_name}}"
+    database_name: "{{code_name}}-db"
+    database_user: "{{code_name}}"
+    # TODO: figure out how to move passwords to environment variable
+    database_password: magic123
+
+  roles:
+    - common
+    - virtualenv
+    - nginx
+    - supervisor
+    - django

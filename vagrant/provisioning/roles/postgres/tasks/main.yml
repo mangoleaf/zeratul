@@ -1,0 +1,57 @@
+---
+- name: add postgresql gpg key
+  sudo: yes
+  shell: wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add - creates=/etc/apt/trusted.gpg.d/apt.postgresql.org.gpg
+
+- name: add postgresql apt sources list
+  sudo: yes
+  shell: echo 'deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main' >> /etc/apt/sources.list.d/postgresql.list creates=/etc/apt/sources.list.d/postgresql.list
+
+- name: add ubuntugis-unstable ppa to sources list
+  sudo: yes
+  shell: add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
+
+- name: update apt-get sources
+  sudo: yes
+  shell: apt-get update
+
+- name: install postgresql packages
+  apt: pkg={{item}} state=installed update_cache=yes
+  with_items:
+    - postgresql-{{postgres_version}}
+    - libpq-dev
+    - python-psycopg2
+
+- name: install postgis (postgres extension)
+  apt: pkg={{item}} state=installed update_cache=yes
+  with_items:
+    - postgresql-9.4-postgis-2.1
+
+- name: ensure database is created
+  postgresql_db: db={{database_name}} encoding='{{encoding}}' lc_collate='{{locale}}.{{encoding}}' lc_ctype='{{locale}}.{{encoding}}' template='template1'
+  sudo: yes
+  sudo_user: postgres
+
+- name: ensure user has access to database
+  postgresql_user: db={{database_name}} name={{database_user}} password={{database_password}} priv=ALL
+  sudo: yes
+  sudo_user: postgres
+
+- name: make user SUPERUSER
+  sudo: yes
+  sudo_user: postgres
+  shell: psql -c "ALTER ROLE {{database_user}} SUPERUSER;"
+
+- name: add postgis support to database
+  sudo: yes
+  sudo_user: postgres
+  shell: psql -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+
+- name: ensure user does not have unnecessary privileges
+  postgresql_user: name={{database_user}} role_attr_flags=NOCREATEDB
+  sudo: yes
+  sudo_user: postgres
+
+- name: restart postgresql
+  sudo: yes
+  command: service postgresql restart

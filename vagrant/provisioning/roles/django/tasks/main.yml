@@ -1,0 +1,14 @@
+---
+
+- name: install project requirements
+  shell: env/bin/pip install -r {{web_root}}/requirements.txt chdir={{project_root}}
+
+- name: install gunicorn start script
+  template: src=gunicorn_start dest={{project_env}}/bin/gunicorn_start mode=u+x group={{linux_user}} owner={{linux_user}}
+  notify:
+    - update supervisor
+    - restart supervisor
+
+#- name: change ownership of files
+#  file: dest={{project_root}} state=directory owner={{linux_user}} group={{linux_user}} mode=0775
+

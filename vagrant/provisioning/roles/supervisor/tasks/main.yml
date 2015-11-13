@@ -1,0 +1,19 @@
+---
+- name: install supervisor
+  apt: pkg=supervisor state=installed update_cache=yes
+
+- name: install {{code_name}} supervisor conf
+  template: src=supervisor.conf dest=/etc/supervisor/conf.d/{{code_name}}.conf
+
+- name: ensure gunicorn required log file exists
+  file: path={{log_dir}}/gunicorn.log state=touch mode=0644 owner={{code_name}} group={{code_name}}
+
+- name: start supervisor
+  service: name=supervisor state=started
+
+- name: reread supervisor conf
+  sudo: yes
+  shell: supervisorctl reread {{code_name}}
+
+- name: reload supervisor
+  service: name=supervisor state=restarted

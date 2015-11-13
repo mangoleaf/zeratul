@@ -1,0 +1,17 @@
+---
+
+- name: Install nginx
+  apt: pkg=nginx state=installed update_cache=yes
+
+- name: Copy nginx server conf to sites-available
+  template: src=nginx_site.conf dest=/etc/nginx/sites-available/{{code_name}}
+
+- name: Create symlink from sites-available to sites-enabled
+  file: src=/etc/nginx/sites-available/{{code_name}} dest=/etc/nginx/sites-enabled/{{code_name}} state=link
+
+- name: Ensure default nginx config is not enabled
+  file: dest=/etc/nginx/sites-enabled/default state=absent
+
+- name: Reload and Restart nginx
+  sudo: yes
+  shell: service nginx reload; service nginx restart
