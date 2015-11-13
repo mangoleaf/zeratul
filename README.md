@@ -1,20 +1,18 @@
-# zeratul
+# Zeratul
 
-Using vagrant to setup a VM
+## Using vagrant to setup a VM
 
 Create the following directory structure:
-
-
-Create a top level directory for the project (Named /project/ in this example)
-Clone the repo into a folder named zeratul within the project folder. /project/zeratul/
-Copy the contents of /project/zeratul/vagrant/ to /project/
+* Create a top level directory for the project (Named /project/ in this example)
+* Clone the repo into a folder named zeratul within the project folder. /project/zeratul/
+* Copy the contents of /project/zeratul/vagrant/ to /project/
 
 The following should be your directory structure when you are finished.
 
-/project
-  VagrantFile
-  provisioning/
-  zeratul/
+* /project/
+  * VagrantFile
+  * provisioning/
+  * zeratul/
 
 Finally, execute the command to setup the vm
 $ vagrant up
