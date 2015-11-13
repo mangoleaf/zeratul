@@ -17,10 +17,12 @@
     database_user: "{{code_name}}"
     # TODO: figure out how to move passwords to environment variable
     database_password: magic123
+    postgres_version: 9.4
 
   roles:
     - common
     - virtualenv
+    - postgres
     - nginx
     - supervisor
     - django
