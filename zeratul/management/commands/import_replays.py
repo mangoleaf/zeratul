@@ -10,7 +10,7 @@ import io
 from zeratul.models import Map, Player, Game, GameTeam, GamePlayer
 
 from django.template.defaultfilters import slugify
-from PIL import Image
+from PIL import Image, ImageChops
 
 from django.conf import settings
 
@@ -39,6 +39,8 @@ class Command(BaseCommand):
             dest='delete',
             help='Delete current replays before importing')
 
+        parser.add_argument('--max', type=int)
+
 
     def increment_import_count(self, type):
         self.import_count[type] += 1
@@ -52,12 +54,20 @@ class Command(BaseCommand):
         if 'delete' in kwargs and kwargs['delete']:
             self.clean_database()
 
+        max = -1
+        if 'max' in kwargs:
+            max = kwargs['max']
+
         replay_paths = self.get_replay_paths()
         count = 0
         total = len(replay_paths)
         for replay in sc2reader.load_replays( replay_paths ):
+            if max > 0:
+                if count == max:
+                    break
+
             count += 1
-            print 'Importing replay %d/%d' % (count, total)
+            print 'Importing replay %d/%d' % (count, total if max < 0 else max)
 
             try:
                 self.import_replay( replay )
@@ -68,7 +78,6 @@ class Command(BaseCommand):
 
 
     def clean_database(self):
-        map_count = Map.objects.all().count()
         Map.objects.all().delete()
         Player.objects.all().delete()
         GamePlayer.objects.all().delete()
@@ -88,12 +97,9 @@ class Command(BaseCommand):
             print 'Replay skipped due to computer players'
             return
 
-        print 'importing map'
         replay.load_map()
         map = self.import_map(replay.map)
-        print 'importing game data'
         cur_game = self.import_game(replay, map)
-        print 'importing teams'
         self.import_teams(replay.teams, cur_game)
 
 
@@ -101,8 +107,8 @@ class Command(BaseCommand):
 
         game_data = {
             'map': map,
-            'start_time': replay.start_time,
-            'end_time': replay.end_time,
+            'started_at': replay.start_time,
+            'length_in_seconds': replay.game_events[-1].second,
             'version': replay.release_string,
             'type': replay.real_type,
             'region': replay.region
@@ -117,24 +123,32 @@ class Command(BaseCommand):
 
 
     def import_map(self, map):
+        map_name = map.name
+        if map_name.startswith('[League] '):
+            map_name = map_name[len('[League] '):]
 
-        if Map.objects.filter(name=map.name).exists():
+
+        if Map.objects.filter(name=map_name).exists():
             # This map has already been imported, nothing to do here
-            return Map.objects.get(name=map.name)
+            return Map.objects.get(name=map_name)
 
 
-        new_map = Map.objects.create(name=map.name)
-        new_map.description = map.description
-        new_map.author = map.author
-        new_map.website = map.website
-        new_map.minimap = self.handle_minimap( map.name, map.minimap )
+        map_data = {
+            'name': map_name,
+            'slug': slugify(map_name),
+            'description': map.description,
+            'author': map.author,
+            'website': map.website,
+            'minimap': self.handle_minimap( map_name, map.minimap )
+        }
+
+        new_map = Map(**map_data)
         new_map.save()
         self.increment_import_count('Map')
         return new_map
 
 
     def import_teams(self, teams, game):
-
         for team in teams:
             team_data = {
                 'team_number': team.number,
@@ -151,8 +165,6 @@ class Command(BaseCommand):
 
 
     def import_player(self, player_data, team):
-        print 'import player'
-
         player = None
         if Player.objects.filter(name=player_data.name).exists():
             player = Player.objects.get(name=player_data.name)
@@ -173,8 +185,14 @@ class Command(BaseCommand):
             'race': player_data.play_race,
             'handicap': player_data.handicap,
             'is_human': player_data.is_human,
+            'apm' : self.calc_apm(player_data),
             'team': team
         }
+
+        unit_data = self.import_player_units( player_data )
+
+        # Combine unit_data into game_player_data
+        game_player_data.update( unit_data )
 
         game_player = GamePlayer(**game_player_data)
         game_player.save()
@@ -182,15 +200,83 @@ class Command(BaseCommand):
         self.increment_import_count('GamePlayer')
         return game_player
 
+    def calc_apm(self, player):
+        event_count = len(player.events)
+        minutes = player.events[-1].second/60.0
+        return int( event_count / minutes )
+
+    def import_player_units(self, player):
+        data = {
+            'workers_created': 0,
+            'workers_lost': 0,
+            'army_created': 0,
+            'army_lost': 0,
+            'buildings_created': 0,
+            'buildings_lost': 0,
+            'minerals_spent': 0,
+            'minerals_lost': 0,
+            'vespene_spent': 0,
+            'vespene_lost': 0,
+            'workers_killed': 0,
+            'army_killed': 0,
+            'buildings_killed': 0,
+        }
+
+        for unit in player.units:
+            # Ignore other unit data that doesn't relate directly to the game
+            if unit.is_army or unit.is_worker or unit.is_building:
+                if unit.finished_at > 0:
+                    data['minerals_spent'] += unit.minerals
+                    data['vespene_spent'] += unit.vespene
+
+                if unit.killed_by:
+                    data['minerals_lost'] += unit.minerals
+                    data['vespene_lost'] += unit.vespene
+
+                if unit.is_worker:
+                    data['workers_created'] += 1
+                    if unit.killed_by:
+                        data['workers_lost'] += 1
+
+                if unit.is_building:
+                    data['buildings_created'] += 1
+                    if unit.killed_by:
+                        data['buildings_lost'] += 1
+
+                if unit.is_army:
+                    data['army_created'] += 1
+                    if unit.killed_by:
+                        data['army_lost'] += 1
+
+        for unit in player.killed_units:
+            if unit.is_worker:
+                data['workers_killed'] += 1
+            if unit.is_army:
+                data['army_killed'] += 1
+            if unit.is_building:
+                data['buildings_killed'] += 1
+
+        return data
+
 
     def handle_minimap(self, minimap_name, minimap_data):
         minimap_file = io.BytesIO(minimap_data)
         im = Image.open(minimap_file)
+        im = self.trim(im)
 
         filename = slugify(minimap_name) + '.png'
-        file_path = settings.MEDIA_ROOT + 'maps/' + filename
+        file_path = settings.MEDIA_ROOT + filename
 
         im.save(file_path, 'png')
 
         return filename
+
+
+    def trim(self, im):
+        bg = Image.new(im.mode, im.size, im.getpixel((0,0)))
+        diff = ImageChops.difference(im, bg)
+        diff = ImageChops.add(diff, diff, 2.0, -100)
+        bbox = diff.getbbox()
+        if bbox:
+            return im.crop(bbox)
 
