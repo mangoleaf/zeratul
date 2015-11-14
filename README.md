@@ -20,3 +20,13 @@ $ vagrant up
 When finished the website will be viewable at http://192.168.37.1:8080
 The nginx server on the vm also listens for local.zeratul.com:8080
 add an entry to your /etc/hosts file if you wish to use this hostname 
+
+
+## Importing Replays (at least for now)
+
+* ssh to the vm. $ vagrant ssh
+* $ cd /opt/zeratulenv/zeratul
+* $ su zeratul  (pw is vagrant)
+* $ source /opt/zeratulenv/env/bin/activate
+* $ ./manage.py migrate
+* $ ./manage.py import_replays  (imports all replays under replay directory -- this will take a while)
