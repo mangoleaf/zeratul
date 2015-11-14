@@ -2,9 +2,23 @@
 
 
 {% block CONTENT_BLOCK %}
-<ul class="list-group">
-    <li class="list-group-item">Players: {{ player_count }}</li>
-    <li class="list-group-item">Maps: {{ map_count }}</li>
-    <li class="list-group-item">Games: {{ game_count }}</li>
-</ul>
+<div class="jumbotron">
+    <div class="container-fluid">
+        <h1>Zeratul</h1>
+        <p>A small, simple SC2 analysis tool based on scraping data from a set of SC2replay files.</p>
+    </div>
+</div>
+
+<div class="panel panel-default">
+    <div class="panel-heading">Data Totals</div>
+    <ul class="list-group">
+        <li class="list-group-item">
+            Games: {{ game_count }} -
+            Avg Game Length: {{ avg_game_length.minutes }}:{{ avg_game_length.seconds }}
+        </li>
+        <li class="list-group-item">Players: {{ player_count }}</li>
+        <li class="list-group-item">Maps: {{ map_count }}</li>
+    </ul>
+    </div>
+</div>
 {% endblock %}

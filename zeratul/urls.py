@@ -22,6 +22,8 @@ urlpatterns = [
     #url(r'^admin/', include(admin.site.urls)),
     url(r'^$', views.home, name='home'),
     url(r'^maps/$', views.maps, name='maps'),
+    url(r'^map/(?P<slug>[\w-]+)/$', views.map_detail, name='map_detail'),
     url(r'^players/$', views.players, name='players'),
     url(r'^games/$', views.games, name='games'),
+    url(r'^game/(?P<id>[0-9]+)/$', views.game_detail, name='game_detail'),
 ]

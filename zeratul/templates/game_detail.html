@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+
+
+{% block CONTENT_BLOCK %}
+
+<div class="jumbotron clearfix">
+    <div class="col-md-9">
+        <h1>{{ map.name }}</h1>
+    </div>
+    <div class="col-md-3">
+        <img style="" src="{{ map.minimap_url }}" />
+    </div>
+</div>
+
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <h5>Number of times played: {{ map.play_count }}</h5>
+        </div>
+    </div>
+    <div class="row">
+    <div class="col-md-8">
+        <div class="panel panel-default">
+            <div class="panel-heading">Games played on this map</div>
+
+            <div class="list-group">
+                {% for game in map.games %}
+                    <a href="{% url 'game_detail' game.id %}" class="list-group-item clearfix">
+                        <div class="container-fluid col-md-4">
+                            {{ game.player1.name }} ({{ game.player1.race }})
+                        </div>
+
+                        <div class="container-fluid col-md-4">
+                            {{ game.player2.name }} ({{ game.player2.race }})
+                        </div>
+
+                        <div class="container-fluid col-md-4">
+                        </div>
+                    </a>
+                {% endfor %}
+            </div>
+
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="panel panel-default">
+            <div class="panel-heading">Race Win Ratios</div>
+
+            <table class="table">
+                <tr>
+                    <td>
+                        <p>Zerg</p>
+                        <p>{{ map.stats.ZvP.Zerg }}</p>
+                        <p>{{ map.stats.ZvP.percent_zerg|floatformat:2 }}%</p>
+                    </td>
+                    <td>vs</td>
+                    <td>
+                        <p>Protoss</p>
+                        <p>{{ map.stats.ZvP.Protoss }}</p>
+                        <p>{{ map.stats.ZvP.percent_protoss|floatformat:2 }}%</p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td>
+                        <p>Zerg</p>
+                        <p>{{ map.stats.ZvT.Zerg }}</p>
+                        <p>{{ map.stats.ZvT.percent_zerg|floatformat:2 }}%</p>
+                    </td>
+                    <td>vs</td>
+                    <td>
+                        <p>Terran</p>
+                        <p>{{ map.stats.ZvT.Terran }}</p>
+                        <p>{{ map.stats.ZvT.percent_terran|floatformat:2 }}%</p>
+                    </td>
+                </tr>
+
+                <tr>
+                    <td>
+                        <p>Terran</p>
+                        <p>{{ map.stats.TvP.Terran }}</p>
+                        <p>{{ map.stats.TvP.percent_terran|floatformat:2 }}%</p>
+                    </td>
+                    <td>vs</td>
+                    <td>
+                        <p>Protoss</p>
+                        <p>{{ map.stats.TvP.Protoss }}</p>
+                        <p>{{ map.stats.TvP.percent_protoss|floatformat:2 }}%</p>
+                    </td>
+                </tr>
+
+            </table>
+        </div>
+    </div>
+    </div>
+</div>
+
+{% endblock %}
