@@ -77,6 +77,7 @@ class Map(models.Model):
             stats[type][game.get_1v1_winner().race] += 1
 
 
+        # TODO: Refactor this
         total = stats['ZvT']['Zerg'] + stats['ZvT']['Terran']
         if total > 0:
             stats['ZvT']['percent_zerg'] = float(stats['ZvT']['Zerg'])/float(stats['ZvT']['Zerg'] + stats['ZvT']['Terran'])*100.0
@@ -147,10 +148,11 @@ class GameManager(models.Manager):
     def get_summarys_for_map(self, map):
         games = []
         # Player1 Name (Race) -- Player2 Name (Race) -- Time -- Date
-        for game in Game.objects.filter(map=map):
+        for game in Game.objects.filter(map=map).order_by('-started_at'):
             game_dict = {
                 'id': game.id,
                 'player1': {
+                    # TODO: Fix this daisy chaining code
                     'name': game.teams.all()[0].players.all()[0].player.name,
                     'race': game.teams.all()[0].players.all()[0].race
                 },
