@@ -127,48 +127,39 @@ class Player(models.Model):
 
 class GameManager(models.Manager):
 
+    def get_all_game_summarys(self):
+        return [ self._convert_length( game.summary_dict() ) for game in Game.objects.all().order_by('-started_at') ]
+
+
     def get_games_for_player(self, player):
         games = Game.objects.filter(teams__players__player=player)
 
 
+    def _convert_length(self, dict):
+        if 'length' in dict.keys():
+            dict['length'] = self._length_to_minutes_and_seconds( dict['length'] )
+        return dict
+
+
+    def _length_to_minutes_and_seconds(self, total_seconds):
+        return {
+            'minutes': total_seconds/60,
+            'seconds': total_seconds%60
+        }
+
+
     def average_game_length(self):
         data = Game.objects.aggregate(Avg('length_in_seconds'))
-        return {
-            'minutes': int(data['length_in_seconds__avg'])/60,
-            'seconds': int(data['length_in_seconds__avg'])%60
-        }
+        return self._length_to_minutes_and_seconds(int(data['length_in_seconds__avg']))
+
 
     def average_game_length_on_map(self, map):
         data = Game.objects.filter(map=map).aggregate(Avg('length_in_seconds'))
-        return {
-            'minutes': int(data['length_in_seconds__avg'])/60,
-            'seconds': int(data['length_in_seconds__avg'])%60
-        }
+        return self._length_to_minutes_and_seconds(int(data['length_in_seconds__avg']))
+
 
     def get_summarys_for_map(self, map):
-        games = []
-        # Player1 Name (Race) -- Player2 Name (Race) -- Time -- Date
-        for game in Game.objects.filter(map=map).order_by('-started_at'):
-            game_dict = {
-                'id': game.id,
-                'player1': {
-                    # TODO: Fix this daisy chaining code
-                    'name': game.teams.all()[0].players.all()[0].player.name,
-                    'race': game.teams.all()[0].players.all()[0].race
-                },
-                'player2': {
-                    'name': game.teams.all()[1].players.all()[0].player.name,
-                    'race': game.teams.all()[1].players.all()[0].race
-                },
-                'length': {
-                    'minutes': game.length_in_seconds/60,
-                    'seconds': game.length_in_seconds%60
-                },
-                'started_at': game.started_at
-            }
-            games.append( game_dict )
-
-        return games
+        return [ self._convert_length( game.summary_dict() ) for game in Game.objects.filter(map=map).order_by('-started_at')]
 
 
     def get_player_win_count(self, player):
@@ -213,6 +204,17 @@ class Game(models.Model):
         # Return the game type (1v1, 2v2, etc)
         return ''
     '''
+    def summary_dict(self):
+        return {
+            'id': self.id,
+            'length': self.length_in_seconds,
+            'started_at': self.started_at,
+            'type': self.type,
+            'region': self.region,
+            'map_name': self.map.name,
+            'teams': [team.summary_dict() for team in self.teams.all().order_by('team_number')]
+        }
+
 
     def team_count(self):
         return self.teams.count()
@@ -283,7 +285,7 @@ class Game(models.Model):
     def team_lineups(self):
         team_races = []
         for team in self.teams.all():
-            team_races.append( team.lineup() )
+            team_races.append( team.player_races() )
         return team_races
 
 
@@ -312,15 +314,29 @@ class GameTeam(models.Model):
     result = models.CharField(max_length=7)
     game = models.ForeignKey(Game, related_name='teams')
 
-    def lineup(self):
+    def player_races(self):
         # Return list of races on the team
-        team_races = []
+        player_races = []
         for player in self.players.all():
-            team_races.append( player.race )
-        return team_races
+            player_races.append( player.race )
+        return player_races
+
+    def player_names(self):
+        names = []
+        for player in players:
+            names.append( player.get_player_name() )
+        return names
 
     def player_count(self):
         return self.players.count()
+
+    def summary_dict(self):
+        return {
+            'team_number': self.team_number,
+            'is_winning_team': self.result == 'Win',
+            'players': [player.summary_dict() for player in self.players.all()]
+        }
+
 
 
 class GamePlayer(models.Model):
@@ -356,3 +372,12 @@ class GamePlayer(models.Model):
             'name': player.name,
 
         }
+
+    def summary_dict(self):
+        return {
+            'name': self.player.name,
+            'race': self.race
+        }
+
+    def get_player_name(self):
+        return player.name
