@@ -1,9 +1,45 @@
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
-from django.db.models import Avg, Q
-
+from django.db.models import Avg, Q, Sum, Min, Max
 from django.template.defaultfilters import slugify
 
-from django.core.exceptions import ObjectDoesNotExist
+
+
+#
+# TODO: Place these in a util package
+#
+
+def _length_to_minutes_and_seconds(total_seconds):
+    return {
+        'minutes': int(total_seconds)/60,
+        'seconds': int(total_seconds)%60
+    }
+
+def _length_to_days_hours_minutes_seconds(total_seconds):
+    minute_length = 60
+    hour_length = 60*minute_length
+    day_length = 24*hour_length
+
+    days = total_seconds/day_length
+    remaining_seconds = total_seconds%day_length
+    hours = remaining_seconds/hour_length
+    remaining_seconds = remaining_seconds%hour_length
+    minutes = remaining_seconds/minute_length
+    seconds = remaining_seconds%minute_length
+
+    return {
+        'days': days,
+        'hours': hours,
+        'minutes': minutes,
+        'seconds': seconds
+    }
+
+def _convert_length(dict):
+    if 'length' in dict.keys():
+        dict['length'] = _length_to_minutes_and_seconds( dict['length'] )
+    return dict
+
+
 
 class MapManager(models.Manager):
 
@@ -13,13 +49,23 @@ class MapManager(models.Manager):
             maps.append( map.as_dict() )
         return maps
 
+    def _get_game_summaries_for_map(self, map):
+        return [ _convert_length(game.summary_dict()) for game in map.games.all().order_by('-started_at')]
+
+
     def get_all_map_details(self, slug):
         try:
-            map = Map.objects.get(slug=slug)
+            map = Map.objects.prefetch_related('games').get(slug=slug)
             map_dict = map.as_dict()
-            map_dict['stats'] = map.compute_1v1_race_stats()
-            map_dict['games'] = Game.objects.get_summarys_for_map(map)
-            map_dict['avg_game_length'] = Game.objects.average_game_length_on_map(map)
+            map_dict['stats'] = map.compute_race_stats()
+
+            map_dict['games'] = self._get_game_summaries_for_map(map)
+
+            data = map.games.aggregate(Avg('length_in_seconds'))
+            map_dict['avg_game_length'] = _length_to_minutes_and_seconds(data['length_in_seconds__avg'])
+
+            data = map.games.aggregate(Sum('length_in_seconds'))
+            map_dict['total_time_played'] = _length_to_days_hours_minutes_seconds(data['length_in_seconds__sum'])
 
             return map_dict
         except ObjectDoesNotExist as e:
@@ -34,7 +80,7 @@ class Map(models.Model):
     '''
     objects = MapManager()
 
-    name = models.CharField(max_length=127, unique=True)
+    name = models.CharField(max_length=127, unique=True, null=False, blank=False)
     slug = models.CharField(max_length=127, unique=True)
     author = models.CharField(max_length=63)
     website = models.CharField(max_length=255)
@@ -56,57 +102,85 @@ class Map(models.Model):
         return map_dict
 
 
-    def compute_1v1_race_stats(self):
-        games = Game.objects.filter(map=self)
-
+    def compute_race_stats(self):
         stats = {
-            'ZvT': {'Zerg': 0, 'Terran': 0},
-            'ZvP': {'Zerg': 0, 'Protoss': 0},
-            'TvP': {'Protoss': 0, 'Terran': 0}
+            'ZvT': {},
+            'ZvP': {},
+            'TvP': {},
+            'ZvZ': {},
+            'TvT': {},
+            'PvP': {}
         }
 
-        for game in games:
-            if not game.is_1v1():
-                continue
+        stats['ZvZ']['Count'] = self.get_mirror_match_count('Zerg')
+        stats['TvT']['Count'] = self.get_mirror_match_count('Terran')
+        stats['PvP']['Count'] = self.get_mirror_match_count('Protoss')
 
-            type = game.get_1v1_type()
+        stats['ZvT']['Count'] = self.get_match_count('Zerg', 'Terran')
+        stats['ZvT']['Zerg'] = self.get_match_win_count('Zerg', 'Terran')
+        stats['ZvT']['Terran'] = self.get_match_win_count('Terran', 'Zerg')
+        stats['ZvT']['percent_zerg'] = 100.0*float(stats['ZvT']['Zerg'])/float(stats['ZvT']['Count']) if stats['ZvT']['Count'] > 0 else 50.0
+        stats['ZvT']['percent_terran'] = 100.0*float(stats['ZvT']['Terran'])/float(stats['ZvT']['Count']) if stats['ZvT']['Count'] > 0 else 50.0
 
-            if not type in stats.keys():
-                continue
+        stats['ZvP']['Count'] = self.get_match_count('Zerg', 'Protoss')
+        stats['ZvP']['Zerg'] = self.get_match_win_count('Zerg', 'Protoss')
+        stats['ZvP']['Protoss'] = self.get_match_win_count('Protoss', 'Zerg')
+        stats['ZvP']['percent_zerg'] = 100.0*float(stats['ZvP']['Zerg'])/float(stats['ZvP']['Count']) if stats['ZvP']['Count'] > 0 else 50.0
+        stats['ZvP']['percent_protoss'] = 100.0*float(stats['ZvP']['Protoss'])/float(stats['ZvP']['Count']) if stats['ZvP']['Count'] > 0 else 50.0
 
-            stats[type][game.get_1v1_winner().race] += 1
-
-
-        # TODO: Refactor this
-        total = stats['ZvT']['Zerg'] + stats['ZvT']['Terran']
-        if total > 0:
-            stats['ZvT']['percent_zerg'] = float(stats['ZvT']['Zerg'])/float(stats['ZvT']['Zerg'] + stats['ZvT']['Terran'])*100.0
-            stats['ZvT']['percent_terran'] = float(stats['ZvT']['Terran'])/float(stats['ZvT']['Zerg'] + stats['ZvT']['Terran'])*100.0
-        else:
-            stats['ZvT']['percent_zerg'] = 50.0
-            stats['ZvT']['percent_terran'] = 50.0
-
-        total = stats['ZvP']['Zerg'] + stats['ZvP']['Protoss']
-        if total > 0:
-            stats['ZvP']['percent_zerg'] = float(stats['ZvP']['Zerg'])/float(stats['ZvP']['Zerg'] + stats['ZvP']['Protoss'])*100.0
-            stats['ZvP']['percent_protoss'] = float(stats['ZvP']['Protoss'])/float(stats['ZvP']['Zerg'] + stats['ZvP']['Protoss'])*100.0
-        else:
-            stats['ZvP']['percent_zerg'] = 50.0
-            stats['ZvP']['percent_protoss'] = 50.0
-
-        total = stats['TvP']['Terran'] + stats['TvP']['Protoss']
-        if total > 0:
-            stats['TvP']['percent_terran'] = float(stats['TvP']['Terran'])/float(stats['TvP']['Terran'] + stats['TvP']['Protoss'])*100.0
-            stats['TvP']['percent_protoss'] = float(stats['TvP']['Protoss'])/float(stats['TvP']['Terran'] + stats['TvP']['Protoss'])*100.0
-        else:
-            stats['TvP']['percent_terran'] = 50.0
-            stats['TvP']['percent_protoss'] = 50.0
+        stats['TvP']['Count'] = self.get_match_count('Terran', 'Protoss')
+        stats['TvP']['Terran'] = self.get_match_win_count('Terran', 'Protoss')
+        stats['TvP']['Protoss'] = self.get_match_win_count('Protoss', 'Terran')
+        stats['TvP']['percent_terran'] = 100.0*float(stats['TvP']['Terran'])/float(stats['TvP']['Count']) if stats['TvP']['Count'] > 0 else 50.0
+        stats['TvP']['percent_protoss'] = 100.0*float(stats['TvP']['Protoss'])/float(stats['TvP']['Count']) if stats['TvP']['Count'] > 0 else 50.0
 
         return stats
 
+    def get_match_count(self, race1, race2):
+        # assert( race1 != race2 )
+        r1_games = self.games.filter(type='1v1', teams__players__race=race1)
+        r2_games = self.games.filter(type='1v1', teams__players__race=race2)
+        return len(list( set(r1_games) & set(r2_games) ))
 
+    def get_match_win_count(self, winning_race, losing_race):
+        r1_games = self.games.filter(type='1v1', teams__players__race=winning_race, teams__result='Win')
+        r2_games = self.games.filter(type='1v1', teams__players__race=losing_race, teams__result='Loss')
+        return len(list( set(r1_games) & set(r2_games) ))
+
+    def get_mirror_match_count(self, race):
+        races = ['Zerg', 'Terran', 'Protoss']
+        races.remove( race )
+        return self.games.filter(Q(type='1v1') & ~Q(teams__players__race=races[0]) & ~Q(teams__players__race=races[1])).count()
+
+#
+# Player
+#
 class PlayerManager(models.Manager):
-    pass
+
+    def total_wins_for(self, player_name):
+        return Game.objects.filter( Q(teams__players__player__name=player_name) & Q(teams__result='Win') ).count()
+
+    def total_losses_for(self, player_name):
+        return Game.objects.filter( Q(teams__players__player__name=player_name) & Q(teams__result='Loss')).count()
+
+    def total_games_for(self, player_name):
+        return Game.objects.filter( Q(teams__players__player__name=player_name) ).count()
+
+    def max_apm_for(self, player_name):
+        try:
+            player = Player.objects.get(name=player_name)
+            result = player.gameplayer_set.aggregate(Max('apm'))
+            return result['apm__avg']
+        except ObjectDoesNotExist:
+            return 0
+
+    def average_apm(self):
+        result = Player.objects.all().aggregate(Avg('gameplayer__apm'))
+        return result['gameplayer__apm__avg']
+
+    def average_of_best_apms(self):
+        result = Player.objects.all().annotate(max_apm=Max('gameplayer__apm')).aggregate(Avg('max_apm'))
+        return result['max_apm__avg']
 
 
 class Player(models.Model):
@@ -118,52 +192,101 @@ class Player(models.Model):
     'slot_data', 'subregion', 'team', 'team_id', 'toon_handle', 'toon_id', 'uid',
     'units', 'url']
     '''
+    objects = PlayerManager()
     # unique=True is fine for now, unsure how to get blizzard battle tags instead of usernames
     name = models.CharField(max_length=63, unique=True)
     region = models.CharField(max_length=31)
     url = models.CharField(max_length=255)
     highest_league = models.IntegerField()
 
-
+#
+# Game
+#
 class GameManager(models.Manager):
 
-    def get_all_game_summarys(self):
-        return [ self._convert_length( game.summary_dict() ) for game in Game.objects.all().order_by('-started_at') ]
+    def get_paged_game_summaries(self, start=0, end=10):
+        return [ _convert_length( game.summary_dict() ) for game in Game.objects.all().order_by('-started_at')[start:end] ]
 
 
     def get_games_for_player(self, player):
         games = Game.objects.filter(teams__players__player=player)
 
 
-    def _convert_length(self, dict):
-        if 'length' in dict.keys():
-            dict['length'] = self._length_to_minutes_and_seconds( dict['length'] )
-        return dict
+    def get_game_detail_for_id(self, id):
+        try:
+            game = Game.objects.get(id=id)
+            return _convert_length( game.detail_dict() )
+        except ObjectDoesNotExist as e:
+            return None
 
-
-    def _length_to_minutes_and_seconds(self, total_seconds):
-        return {
-            'minutes': total_seconds/60,
-            'seconds': total_seconds%60
-        }
 
 
     def average_game_length(self):
         data = Game.objects.aggregate(Avg('length_in_seconds'))
-        return self._length_to_minutes_and_seconds(int(data['length_in_seconds__avg']))
+        return _length_to_minutes_and_seconds(int(data['length_in_seconds__avg']))
 
+    def total_gameplay_time(self):
+        data = Game.objects.aggregate(Sum('length_in_seconds'))
+        return _length_to_days_hours_minutes_seconds(int(data['length_in_seconds__sum']))
 
     def average_game_length_on_map(self, map):
         data = Game.objects.filter(map=map).aggregate(Avg('length_in_seconds'))
-        return self._length_to_minutes_and_seconds(int(data['length_in_seconds__avg']))
-
-
-    def get_summarys_for_map(self, map):
-        return [ self._convert_length( game.summary_dict() ) for game in Game.objects.filter(map=map).order_by('-started_at')]
+        return _length_to_minutes_and_seconds(int(data['length_in_seconds__avg']))
 
 
     def get_player_win_count(self, player):
         pass
+
+    def num_1v1_wins(self, race):
+        return Game.objects.filter(Q(teams__players__race=race) & Q(teams__result='Win')).count()
+
+    def number_of_games_with(self, race):
+        return Game.objects.filter(Q(teams__players__race=race)).count()
+
+    def get_match_count(self, race1, race2):
+        # assert( race1 != race2 )
+        r1_games = Game.objects.filter(type='1v1', teams__players__race=race1)
+        r2_games = Game.objects.filter(type='1v1', teams__players__race=race2)
+        return len(list( set(r1_games) & set(r2_games) ))
+
+    def get_match_win_count(self, winning_race, losing_race):
+        r1_games = Game.objects.filter(type='1v1', teams__players__race=winning_race, teams__result='Win')
+        r2_games = Game.objects.filter(type='1v1', teams__players__race=losing_race, teams__result='Loss')
+        return len(list( set(r1_games) & set(r2_games) ))
+
+    def get_mirror_match_count(self, race):
+        races = ['Zerg', 'Terran', 'Protoss']
+        races.remove( race )
+        return Game.objects.filter(Q(type='1v1') & ~Q(teams__players__race=races[0]) & ~Q(teams__players__race=races[1])).count()
+
+    def get_all_TvPs(self):
+        pass
+
+
+    #
+    # Resources
+    #
+
+    def total_generic(self, item):
+        result = Game.objects.aggregate(Sum('teams__players__' + item))
+        return result['teams__players__' + item + '__sum']
+
+    def total_generic_by_race(self, race, item):
+        result = Game.objects.filter(teams__players__race=race).aggregate(Sum('teams__players__' + item))
+        return result['teams__players__' + item + '__sum']
+
+    def average_generic(self, item):
+        result = Game.objects.aggregate(Avg('teams__players__' + item))
+        return result['teams__players__' + item + '__avg']
+
+    def average_generic_by_race(self, race, item, result=None):
+        if result != None:
+            result = 'Win' if result == True else 'Loss'
+            result = Game.objects.filter(teams__players__race=race, teams__result=result).aggregate(Avg('teams__players__' + item))
+            return result['teams__players__' + item + '__avg']
+        else:
+            result = Game.objects.filter(teams__players__race=race).aggregate(Avg('teams__players__' + item))
+            return result['teams__players__' + item + '__avg']
 
 
 class Game(models.Model):
@@ -209,16 +332,54 @@ class Game(models.Model):
             'id': self.id,
             'length': self.length_in_seconds,
             'started_at': self.started_at,
-            'type': self.type,
+            'type': self.get_game_type(),
             'region': self.region,
             'map_name': self.map.name,
+            'map_image_url': self.map.minimap.url,
+            'expansion': self.get_expansion_name(),
             'teams': [team.summary_dict() for team in self.teams.all().order_by('team_number')]
         }
 
 
+    def detail_dict(self):
+        return {
+            'id': self.id,
+            'length': self.length_in_seconds,
+            'started_at': self.started_at,
+            'type': self.get_game_type(),
+            'region': self.region,
+            'map_name': self.map.name,
+            'map_image_url': self.map.minimap.url,
+            'expansion': self.get_expansion_name(),
+            'teams': [team.summary_dict() for team in self.teams.all().order_by('team_number')]
+        }
+
+
+    def get_expansion_name(self):
+        if self.version.startswith('1'):
+            return 'Wings of Liberty'
+        if self.version.startswith('2'):
+            return 'Heart of the Swarm'
+        if self.version.startswith('3'):
+            return 'Legacy of the Void'
+
+    def get_expansion_arbreviation(self):
+        if self.version.startswith('1'):
+            return 'WoL'
+        if self.version.startswith('2'):
+            return 'HotS'
+        if self.version.startswith('3'):
+            return 'LoTV'
+
     def team_count(self):
         return self.teams.count()
 
+
+    def get_game_type(self):
+        if self.is_1v1():
+            return self.get_1v1_type()
+        else:
+            return self.type
 
     def is_1v1(self):
         if self.team_count() != 2:
@@ -295,9 +456,9 @@ class Game(models.Model):
             return self.teams.get(result='Win')
         except ObjectDoesNotExist as e:
             # TODO: Setup Django logger
-            # TODO: Need better error handling.
             # If the data is correct this should never occur, just print for now
             print 'ERROR: Game object could not find a winning team'
+            return []
 
 
     def get_1v1_winner(self):
@@ -330,17 +491,26 @@ class GameTeam(models.Model):
     def player_count(self):
         return self.players.count()
 
+    def is_winner(self):
+        return self.result == 'Win'
+
     def summary_dict(self):
         return {
             'team_number': self.team_number,
-            'is_winning_team': self.result == 'Win',
+            'is_winning_team': self.is_winner(),
             'players': [player.summary_dict() for player in self.players.all()]
         }
 
+    def detail_dict(self):
+        return {
+            'team_number': self.team_number,
+            'is_winning_team': self.is_winner(),
+            'players': [player.detail_dict() for player in self.players.all()]
+        }
 
 
 class GamePlayer(models.Model):
-    player = models.ForeignKey(Player)
+    player = models.ForeignKey(Player, null=False)
     team = models.ForeignKey(GameTeam, related_name='players')
     color = models.CharField(max_length=31)
     race = models.CharField(max_length=7)
@@ -379,5 +549,36 @@ class GamePlayer(models.Model):
             'race': self.race
         }
 
+    def detail_dict(self):
+        dict = self.summary_dict()
+        dict.update({
+            'apm': self.apm,
+            'army': {
+                'created': self.army_created,
+                'killed': self.army_killed,
+                'lost': self.army_lost
+            },
+            'buildings': {
+                'created': self.army_killed,
+                'killed': self.buildings_killed,
+                'lost': self.buildings_lost
+            },
+            'workers': {
+                'created': self.workers_created,
+                'killed': self.workers_killed,
+                'lost': self.workers_lost
+            },
+            'minerals': {
+                'spent': self.minerals_spent,
+                'lost': self.minerals_lost
+            },
+            'vespene': {
+                'spent': self.vespene_spent,
+                'lost': self.vespene_lost
+            }
+        })
+        return dict
+
     def get_player_name(self):
         return player.name
+
