@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
 
+{% load staticfiles %}
+{% load zeratul_template_utils %}
 
 {% block CONTENT_BLOCK %}
 <div class="jumbotron">
@@ -14,11 +16,123 @@
     <ul class="list-group">
         <li class="list-group-item">
             Games: {{ game_count }} -
-            Avg Game Length: {{ avg_game_length.minutes }}:{{ avg_game_length.seconds }}
+            Avg Game Length: {{ avg_game_length.minutes }}:{{ avg_game_length.seconds }} -
+            Total Gameplay Time: {{ total_time.days }} days {{ total_time.hours }} hours {{ total_time.minutes }} minutes {{ total_time.seconds }} seconds
+
         </li>
-        <li class="list-group-item">Players: {{ player_count }}</li>
+        <li class="list-group-item">Players: {{ player_count }} -- Avg APM: {{ avg_apm }} -- Avg of Best APMs: {{ avg_of_best_apm }}</li>
         <li class="list-group-item">Maps: {{ map_count }}</li>
     </ul>
     </div>
+</div>
+
+<div class="row container-fluid">
+<div class="col-md-4">
+<h3>Match Type Counts</h3>
+<ul>
+    <li>ZvZ: {{ matches.ZvZ }}</li>
+    <li>TvT: {{ matches.TvT }}</li>
+    <li>PvP: {{ matches.PvP }}</li>
+    <li>ZvT: {{ matches.ZvT }}</li>
+    <li>ZvP: {{ matches.ZvP }}</li>
+    <li>TvP: {{ matches.TvP }}</li>
+</ul>
+</div>
+<div class="col-md-4">
+<h3>Overview of Wins Per Race</h3>
+<ul>
+    <li>Zerg won {{ Zerg.wins }} of {{ Zerg.games }} games -- {{ Zerg.win_rate|floatformat:2 }}%</li>
+    <li>Protoss won {{ Protoss.wins }} of {{ Protoss.games }} games -- {{ Protoss.win_rate|floatformat:2 }}%</li>
+    <li>Terran won {{ Terran.wins }} of {{ Terran.games }} games -- {{ Terran.win_rate|floatformat:2 }}%</li>
+</ul>
+</div>
+<div class="col-md-4">
+    <div class="panel panel-default">
+        <div class="panel-heading"><h3>1v1 Win Ratios</h3></div>
+
+        <table class="table">
+            <tr>
+                <td>
+                    <p><img width=20 height=20 src="{% static 'img/zerg.png' %}"/> Zerg</p>
+                    <p>{{ win_ratios.zvp_z }}</p>
+                    <p>{{ win_ratios.zvp_z_per|floatformat:2 }}%</p>
+                </td>
+                <td>vs</td>
+                <td>
+                    <p><img class="protoss-icon" width=10 height=20 src="{% static 'img/protoss.png' %}"/> Protoss</p>
+                    <p>{{ win_ratios.zvp_p }}</p>
+                    <p>{{ win_ratios.zvp_p_per|floatformat:2 }}%</p>
+                </td>
+            </tr>
+
+            <tr>
+                <td>
+                    <p><img width=20 height=20 src="{% static 'img/zerg.png' %}"/> Zerg</p>
+                    <p>{{ win_ratios.zvt_z }}</p>
+                    <p>{{ win_ratios.zvt_z_per|floatformat:2 }}%</p>
+                </td>
+                <td>vs</td>
+                <td>
+                    <p><img width=20 height=20 src="{% static 'img/terran.png' %}"/> Terran</p>
+                    <p>{{ win_ratios.zvt_t }}</p>
+                    <p>{{ win_ratios.zvt_t_per|floatformat:2 }}%</p>
+                </td>
+            </tr>
+
+            <tr>
+                <td>
+                    <p><img width=20 height=20 src="{% static 'img/terran.png' %}"/> Terran</p>
+                    <p>{{ win_ratios.tvp_t }}</p>
+                    <p>{{ win_ratios.tvp_t_per|floatformat:2 }}%</p>
+                </td>
+                <td>vs</td>
+                <td>
+                    <p><img class="protoss-icon" width=10 height=20 src="{% static 'img/protoss.png' %}"/>  Protoss</p>
+                    <p>{{ win_ratios.tvp_p }}</p>
+                    <p>{{ win_ratios.tvp_p_per|floatformat:2 }}%</p>
+                </td>
+            </tr>
+
+        </table>
+    </div>
+</div>
+</div>
+
+
+<div class="row" style="padding-top: 20px;">
+<table class="table">
+    <tr>
+    {% for header in resources_header %}
+        <th>{{ header }}</th>
+    {% endfor %}
+    </tr>
+    {% for items in resources %}
+    <tr>
+        {% for item in items %}
+            <td>{% if item|get_type == 'float' %}{{ item|floatformat:2 }}{% else %}{{ item }}{% endif %}</td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+</table>
+</div>
+
+<div class="row">
+<table class="table">
+    <tr>
+    {% for header in units_header %}
+        <th>{{ header }}</th>
+    {% endfor %}
+    </tr>
+    {% for items in units %}
+    <tr>
+        {% for item in items %}
+            <td>{% if item|get_type == 'float' %}{{ item|floatformat:2 }}{% else %}{{ item }}{% endif %}</td>
+        {% endfor %}
+    </tr>
+    {% endfor %}
+</table>
+</div>
+
+
 </div>
 {% endblock %}

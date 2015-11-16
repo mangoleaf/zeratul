@@ -1,13 +1,14 @@
 {% extends 'base.html' %}
 
+{% load staticfiles %}
 
 {% block CONTENT_BLOCK %}
 
-<div class="list-group">
+<div class="row list-group">
     {% for map in maps %}
         <a href="{% url 'map_detail' map.slug %}" class="list-group-item clearfix">
-            <div class="container-fluid col-md-2">
-                <img style="" src="{{ map.minimap_url }}" />
+            <div class="col-md-2">
+                <img class="minimap-preview" src="{{ map.minimap_url }}" />
             </div>
             <div class="container-fluid col-md-10">
                 <h4 class="list-group-item-heading">{{ map.name }}</h4>

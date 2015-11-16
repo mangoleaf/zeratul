@@ -1,6 +1,68 @@
 {% extends 'base.html' %}
 
+{% load staticfiles %}
+{% load zeratul_template_utils %}
 
 {% block CONTENT_BLOCK %}
+<div class="row">
+Displaying {{ page_result_count }} of {{ data_count }} results: {{ data_start_display }} - {{ data_end }}
+</div>
+<div class="row list-group">
+    {% for game in games %}
+        <a href="{% url 'game_detail' game.id %}" class="list-group-item clearfix">
+            <div class="container-fluid col-md-12">
+                <div class="row">
+                    <div class="col-md-12">
+                        <h4>{{ game.type }} on {{ game.map_name }}</h4>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-2">
+                        <img class="minimap-preview" src="{{ game.map_image_url }}"/>
+                    </div>
+                    <div class="container col-md-3">
+                        <div class="row">Game Length: {{ game.length.minutes }}:{{ game.length.seconds }}</div>
+                        <div class="row">Play Date: {{ game.started_at|date:"M d, Y" }}</div>
+                        <div class="row">Expansion: {{ game.expansion }}</div>
+                        <div class="row">Region: {{ game.region }}</div>
+                    </div>
+                    <div class="container col-md-7">
+                        <div class="col-md-12">
+                            {% for team in game.teams %}
+                                <div class="col-md-{% divide 12 game.teams|length %}">
+                                {% for player in team.players %}
+                                    <div class="row {% if team.is_winning_team %}winner{% else %}loser{% endif %}">
+                                    {% if player.race == 'Zerg' %}
+                                    <img width=20 height=20 src="{% static 'img/zerg.png' %}"/>
+                                    {% elif player.race == 'Terran' %}
+                                    <img width=20 height=20 src="{% static 'img/terran.png' %}"/>
+                                    {% else %}
+                                    <img class="protoss-icon" width=10 height=20 src="{% static 'img/protoss.png' %}"/>
+                                    {% endif %}
+
+                                    {{ player.name }}
+                                    </div>
+                                {% endfor %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </a>
+    {% endfor %}
+
+</div>
+
+<div class="row">
+    <ul class="pagination">
+        <li {% if page_last == 0 %}class="disabled"{%endif%}><a href="{% url 'games' %}?page={{page_last}}">Prev</a></li>
+        {% for i in pagination %}
+            <li {% if i == page %}class="active"{%endif%}><a href="{% url 'games' %}?page={{i}}">{{i}}</a></li>
+        {% endfor %}
+        <li {% if page == page_count %}class="disabled"{%endif%}><a href="{% url 'games' %}?page={{page_next}}">Next</a></li>
+    </ul>
+</div>
 
 {% endblock %}
