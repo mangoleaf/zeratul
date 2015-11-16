@@ -3,9 +3,16 @@
   font-weight: bold;
 }
 
+.loser {
+  color: gray;
+}
+
 .protoss-icon {
   margin: 0px 5px;
 }
 
-
+.minimap-preview {
+  max-width: 160px;
+  height: auto;
+}
 
