@@ -105,13 +105,19 @@ class Command(BaseCommand):
 
     def import_game(self, replay, map):
 
+        region_map = {
+            'kr' : 'Korea',
+            'eu' : 'Europe',
+            'us' : 'Americas',
+        }
+
         game_data = {
             'map': map,
             'started_at': replay.start_time,
             'length_in_seconds': replay.game_events[-1].second,
             'version': replay.release_string,
             'type': replay.real_type,
-            'region': replay.region
+            'region': region_map[replay.region] if replay.region in region_map.keys() else replay.region,
         }
 
         cur_game = Game(**game_data)
